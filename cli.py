@@ -1,6 +1,14 @@
 import sys
 import socket
-from common import send_line, recv_line, recv_exact
+from common import BUFFER_SIZE, send_line, recv_line
+
+
+def open_data_listener():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("", 0))  # ephemeral port
+    sock.listen(1)
+    port = sock.getsockname()[1]
+    return sock, port
 
 
 def main():
@@ -23,25 +31,123 @@ def main():
             if not command:
                 continue
 
-            send_line(client_socket, command)
+            cmd = command.split()[0].lower()
 
-            if command.lower() == "quit":
+
+            if cmd == "test":
+                listener, data_port = open_data_listener()
+
+                try:
+                    send_line(client_socket, f"PORT {data_port}")
+                    resp = recv_line(client_socket)
+                    print(resp)
+
+                    if not resp.startswith("OK"):
+                        continue
+
+                    send_line(client_socket, "TEST")
+
+                    data_sock, _ = listener.accept()
+                    data = data_sock.recv(BUFFER_SIZE)
+
+                    print("Data channel received:",
+                          data.decode("utf-8").strip())
+
+                    data_sock.close()
+
+                    print(recv_line(client_socket))  
+
+                finally:
+                    listener.close()
+
+
+            elif cmd == "ls":
+                listener, data_port = open_data_listener()
+
+                try:
+                    send_line(client_socket, f"PORT {data_port}")
+                    resp = recv_line(client_socket)
+
+                    if not resp.startswith("OK"):
+                        print(resp)
+                        continue
+
+                    send_line(client_socket, "LS")
+
+                    resp = recv_line(client_socket)
+                    if not resp.startswith("OK"):
+                        print(resp)
+                        continue
+
+                    data_sock, _ = listener.accept()
+
+                    data = b""
+                    while True:
+                        chunk = data_sock.recv(BUFFER_SIZE)
+                        if not chunk:
+                            break
+                        data += chunk
+
+                    data_sock.close()
+
+                    print(data.decode("utf-8"), end="")
+
+                finally:
+                    listener.close()
+
+
+            elif cmd == "get":
+                if len(command.split()) < 2:
+                    print("Usage: get <filename>")
+                    continue
+
+                filename = " ".join(command.split()[1:])
+
+                listener, data_port = open_data_listener()
+
+                try:
+                    send_line(client_socket, f"PORT {data_port}")
+                    resp = recv_line(client_socket)
+
+                    if not resp.startswith("OK"):
+                        print(resp)
+                        continue
+
+                    send_line(client_socket, f"GET {filename}")
+
+                    resp = recv_line(client_socket)
+                    if not resp.startswith("OK"):
+                        print(resp)
+                        continue
+
+                    size = int(resp.split()[1])
+
+                    data_sock, _ = listener.accept()
+
+                    received = 0
+                    with open(filename, "wb") as f:
+                        while received < size:
+                            chunk = data_sock.recv(min(BUFFER_SIZE, size - received))
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            received += len(chunk)
+
+                    data_sock.close()
+
+                    print(f"{filename}: {received} bytes received")
+
+                finally:
+                    listener.close()
+
+            elif cmd == "quit":
+                send_line(client_socket, "QUIT")
                 print(recv_line(client_socket))
                 break
-            if command.split()[0].lower() == "ls":
-                response = recv_line(client_socket)
-                if response and response.startswith("OK"):
-                    parts = response.split()
 
-                    if len(parts) > 1:
-                        size = int(parts[1])    
-                        data = recv_exact(client_socket, size)
-                        print(data.decode("utf-8"), end="")
-                    else:
-                        print(f"Server response: {response}")
-                else:
-                    print(f"Error from server: {response}")
+
             else:
+                send_line(client_socket, command)
                 response = recv_line(client_socket)
                 print(f"Server response: {response}")
 

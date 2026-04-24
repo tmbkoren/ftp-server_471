@@ -1,3 +1,5 @@
+BUFFER_SIZE = 4096
+
 def send_line(sock, text):
     sock.sendall((text + "\n").encode("utf-8"))
 
