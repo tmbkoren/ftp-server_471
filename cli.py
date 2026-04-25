@@ -1,4 +1,5 @@
 import sys
+import os
 import socket
 from common import BUFFER_SIZE, send_line, recv_line
 
@@ -140,10 +141,60 @@ def main():
                 finally:
                     listener.close()
 
+
             elif cmd == "quit":
                 send_line(client_socket, "QUIT")
                 print(recv_line(client_socket))
                 break
+
+
+            elif cmd == "put":
+                if len(command.split()) < 2:
+                    print("Usage: put <filename>")
+                    continue
+
+                filename = " ".join(command.split()[1:])
+
+                if not os.path.isfile(filename):
+                    print("Local file not found")
+                    continue
+
+                size = os.path.getsize(filename)
+
+                listener, data_port = open_data_listener()
+
+                try:
+                    send_line(client_socket, f"PORT {data_port}")
+                    resp = recv_line(client_socket)
+
+                    if not resp.startswith("OK"):
+                        print(resp)
+                        continue
+
+                    send_line(client_socket, f"PUT {filename} {size}")
+
+                    resp = recv_line(client_socket)
+                    if not resp.startswith("OK"):
+                        print(resp)
+                        continue
+
+                    data_sock, _ = listener.accept()
+
+                    sent = 0
+                    with open(filename, "rb") as f:
+                        while True:
+                            chunk = f.read(4096)
+                            if not chunk:
+                                break
+                            data_sock.sendall(chunk)
+                            sent += len(chunk)
+
+                    data_sock.close()
+
+                    print(f"{filename}: {sent} bytes sent")
+
+                finally:
+                    listener.close()
 
 
             else:

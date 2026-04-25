@@ -16,5 +16,13 @@ Developed and tested on Python 3.14.2
 `pip install -r requirements.txt`
 
 4. Run:
-- server: `python serv.py <port number>`
-- client: `python cli.py <server ip> <port number>`
+- server:
+```
+cd server
+python ../serv.py <port number>
+```
+- client:
+```
+cd client
+python ../cli.py <server ip> <port number>
+```

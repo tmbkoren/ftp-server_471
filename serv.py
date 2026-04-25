@@ -136,6 +136,49 @@ def main():
 
                     pending_data_port = None
 
+
+                elif cmd == "put":
+                    if len(parts) < 3:
+                        send_line(connection_socket, "ERROR Usage: PUT <filename> <size>")
+                        continue
+
+                    if pending_data_port is None:
+                        send_line(connection_socket, "ERROR No data port set")
+                        continue
+
+                    filename = " ".join(parts[1:-1])
+
+                    try:
+                        size = int(parts[-1])
+                    except ValueError:
+                        send_line(connection_socket, "ERROR Invalid size")
+                        continue
+
+                    try:
+                        send_line(connection_socket, "OK")
+
+                        data_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        data_sock.connect((client_ip, pending_data_port))
+
+                        received = 0
+                        with open(filename, "wb") as f:
+                            while received < size:
+                                chunk = data_sock.recv(min(4096, size - received))
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+                                received += len(chunk)
+
+                        data_sock.close()
+
+                        print(f"SUCCESS: put {filename} ({received} bytes)")
+
+                    except Exception as e:
+                        send_line(connection_socket, f"ERROR {str(e)}")
+                        print(f"FAILURE: put {filename} - {str(e)}")
+
+                    pending_data_port = None
+
                 else:
                     send_line(connection_socket, "ERROR: Unknown command")
                     print(f"ERROR: Unknown command '{cmd}'")
